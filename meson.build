@@ -32,3 +32,24 @@ librw_dep = declare_dependency(
     include_directories : inc,
     link_with : librw
 )
+
+executable(
+    'librw-bench', [
+        'bench/main.cpp',
+        'bench/map.cpp'
+    ],
+    dependencies: [librw_dep],
+    include_directories : inc
+)
+
+testexe = executable(
+    'librw-test', [
+        'test/main.cpp',
+        'test/map.cpp'
+    ],
+    dependencies: [librw_dep],
+    include_directories : inc
+)
+
+test('librw test', testexe)
+
