@@ -44,6 +44,7 @@ executable(
 
 testexe = executable(
     'librw-test', [
+        'test/argparse.cpp',
         'test/main.cpp',
         'test/map.cpp'
     ],
