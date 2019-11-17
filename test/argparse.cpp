@@ -91,9 +91,155 @@ int fake_main(int argc, char* argv[]) {
 // todo: test required vs optional
 // todo: test int args
 // todo: test required vs. optional args
-// todo: test conflicting args
 // todo: test argument groups, commands
 // todo: test positional arguments
+//
+// todo: test usage
+// todo: test empty short / long names
+// todo: test positional, required + not required
+// todo: test required args
+
+struct TestReporter {
+    void conflict(std::string_view arg1, std::string_view arg2) {
+        got_conflict = true;
+        this->arg1 = arg1;
+        this->arg2 = arg2;
+    }
+
+    void unexpected(std::string_view name) {
+        got_unexpected = true;
+        arg1 = name;
+    }
+
+    void missing_required_of() {
+        got_missing_required_of = true;
+    }
+
+    void missing_required(std::string_view name) {
+        got_missing_required = true;
+        arg1 = name;
+    }
+
+    void missing_value(std::string_view name) {
+        got_missing_value = true;
+        arg1 = name;
+    }
+
+    void usage(bool ok, std::string_view text) {
+        got_usage = true;
+        argok = ok;
+        arg1 = text;
+    }
+
+    bool got_conflict = false;
+    bool got_unexpected = false;
+    bool got_missing_required_of = false;
+    bool got_missing_required = false;
+    bool got_missing_value = false;
+    bool got_usage = false;
+
+    bool argok = false;
+    std::string_view arg1, arg2;
+};
+
+TEST_CASE("excl args")
+{
+    std::string a, b, c, d;
+    TestReporter tr;
+
+    struct NoOpts {};
+    auto p = rw::argparse::parser<NoOpts,TestReporter>{};
+    p.one_of()
+        .optional(&a, "longa"sv, "a"sv)
+        .optional(&b, "longb"sv, "b"sv);
+    p.one_of(true)
+        .optional(&c, "longc"sv, "c"sv)
+        .optional(&d, "longd"sv, "d"sv);
+
+    SUBCASE("conflict optional short") {
+        std::array args = {
+            "prog",
+            "-a=abc",
+            "-b=abc"
+        };
+        auto o = p.parse(args.size(), const_cast<char**>(args.data()), tr);
+
+        REQUIRE(!o);
+        REQUIRE(tr.got_conflict);
+        REQUIRE(!tr.got_unexpected);
+        REQUIRE(!tr.got_missing_required_of);
+        REQUIRE(!tr.got_missing_required);
+        REQUIRE(!tr.got_missing_value);
+        REQUIRE(tr.got_usage);
+    }
+
+    SUBCASE("conflict optional long") {
+        std::array args = {
+            "prog",
+            "--longa=abc",
+            "--longb=abc"
+        };
+        auto o = p.parse(args.size(), const_cast<char**>(args.data()), tr);
+
+        REQUIRE(!o);
+        REQUIRE(tr.got_conflict);
+        REQUIRE(!tr.got_unexpected);
+        REQUIRE(!tr.got_missing_required_of);
+        REQUIRE(!tr.got_missing_required);
+        REQUIRE(!tr.got_missing_value);
+        REQUIRE(tr.got_usage);
+    }
+
+    SUBCASE("conflict required long") {
+        std::array args = {
+            "prog",
+            "--longc=abc",
+            "--longd=abc"
+        };
+        auto o = p.parse(args.size(), const_cast<char**>(args.data()), tr);
+
+        REQUIRE(!o);
+        REQUIRE(tr.got_conflict);
+        REQUIRE(!tr.got_unexpected);
+        REQUIRE(!tr.got_missing_required_of);
+        REQUIRE(!tr.got_missing_required);
+        REQUIRE(!tr.got_missing_value);
+        REQUIRE(tr.got_usage);
+    }
+
+    SUBCASE("required present") {
+        std::array args = {
+            "prog",
+            "--longd=abc",
+        };
+        auto o = p.parse(args.size(), const_cast<char**>(args.data()), tr);
+
+        REQUIRE(o);
+        REQUIRE(d == "abc");
+        REQUIRE(!tr.got_conflict);
+        REQUIRE(!tr.got_unexpected);
+        REQUIRE(!tr.got_missing_required_of);
+        REQUIRE(!tr.got_missing_required);
+        REQUIRE(!tr.got_missing_value);
+        REQUIRE(!tr.got_usage);
+    }
+
+    SUBCASE("required missing") {
+        std::array args = {
+            "prog",
+            "--longa=abc",
+        };
+        auto o = p.parse(args.size(), const_cast<char**>(args.data()), tr);
+
+        REQUIRE(!o);
+        REQUIRE(!tr.got_conflict);
+        REQUIRE(!tr.got_unexpected);
+        REQUIRE(tr.got_missing_required_of);
+        REQUIRE(!tr.got_missing_required);
+        REQUIRE(!tr.got_missing_value);
+        REQUIRE(tr.got_usage);
+    }
+}
 
 TEST_CASE("arg value formats")
 {
@@ -110,11 +256,11 @@ TEST_CASE("arg value formats")
 
         struct NoOpts {};
         auto o = rw::argparse::parser<NoOpts>{}
-            .optional(&a, ""sv, "a"sv)
-            .optional(&b, ""sv, "b"sv)
-            .optional(&c, ""sv, "c"sv)
-            .optional(&d, ""sv, "d"sv)
-            .optional(&e, ""sv, "e"sv)
+            .optional(&a, "nota"sv, "a"sv)
+            .optional(&b, "notb"sv, "b"sv)
+            .optional(&c, "notc"sv, "c"sv)
+            .optional(&d, "notd"sv, "d"sv)
+            .optional(&e, "note"sv, "e"sv)
             .parse(args.size(), const_cast<char**>(args.data()));
 
         REQUIRE(o);
@@ -136,9 +282,9 @@ TEST_CASE("arg value formats")
 
         struct NoOpts {};
         auto o = rw::argparse::parser<NoOpts>{}
-            .optional(&a, "a"sv, ""sv)
-            .optional(&b, "b"sv, ""sv)
-            .optional(&c, "c"sv, ""sv)
+            .optional(&a, "a"sv)
+            .optional(&b, "b"sv)
+            .optional(&c, "c"sv)
             .parse(args.size(), const_cast<char**>(args.data()));
 
         REQUIRE(o);
@@ -159,7 +305,7 @@ TEST_CASE("bool args")
 
         struct NoOpts {};
         auto o = rw::argparse::parser<NoOpts>{}
-            .optional(&a, ""sv, "a"sv)
+            .optional(&a, "nota"sv, "a"sv)
             .parse(args.size(), const_cast<char**>(args.data()));
 
         REQUIRE(o);
@@ -175,7 +321,7 @@ TEST_CASE("bool args")
 
         struct NoOpts {};
         auto o = rw::argparse::parser<NoOpts>{}
-            .optional(&arg1, "arg1"sv, ""sv)
+            .optional(&arg1, "arg1"sv)
             .parse(args.size(), const_cast<char**>(args.data()));
 
         REQUIRE(o);
@@ -193,7 +339,7 @@ TEST_CASE("bool args")
 
         // todo: allow no usage string, maybe add usage func
         auto o = rw::argparse::parser<Opts>{}
-            .optional(&Opts::arg1, "arg1"sv, ""sv)
+            .optional(&Opts::arg1, "arg1"sv)
             .parse(args.size(), const_cast<char**>(args.data()));
 
         REQUIRE(o);
@@ -214,7 +360,7 @@ TEST_CASE("string args")
 
         struct NoOpts {};
         auto o = rw::argparse::parser<NoOpts>{}
-            .optional(&arg1, "arg1"sv, ""sv)
+            .optional(&arg1, "arg1"sv)
             .parse(args.size(), const_cast<char**>(args.data()));
 
         REQUIRE(o);
@@ -232,7 +378,7 @@ TEST_CASE("string args")
 
         // todo: allow no usage string, maybe add usage func
         auto o = rw::argparse::parser<Opts>{}
-            .optional(&Opts::arg1, "arg1"sv, ""sv)
+            .optional(&Opts::arg1, "arg1"sv)
             .parse(args.size(), const_cast<char**>(args.data()));
 
         REQUIRE(o);
@@ -248,7 +394,7 @@ TEST_CASE("string args")
 
         struct NoOpts {};
         auto o = rw::argparse::parser<NoOpts>{}
-            .optional(&arg1, "arg1"sv, ""sv)
+            .optional(&arg1, "arg1"sv)
             .parse(args.size(), const_cast<char**>(args.data()));
 
         REQUIRE(o);
@@ -266,7 +412,7 @@ TEST_CASE("string args")
 
         // todo: allow no usage string, maybe add usage func
         auto o = rw::argparse::parser<Opts>{}
-            .optional(&Opts::arg1, "arg1"sv, ""sv)
+            .optional(&Opts::arg1, "arg1"sv)
             .parse(args.size(), const_cast<char**>(args.data()));
 
         REQUIRE(o);
@@ -288,9 +434,9 @@ TEST_CASE("default vals")
 
     // todo: allow no usage, maybe add usage func
     auto o = rw::argparse::parser<Opts>{}
-        .optional(&Opts::arg1, "arg1"sv, ""sv)
-        .optional(&Opts::arg2, "arg2"sv, ""sv)
-        .optional(&Opts::arg3, "arg3"sv, ""sv)
+        .optional(&Opts::arg1, "arg1"sv)
+        .optional(&Opts::arg2, "arg2"sv)
+        .optional(&Opts::arg3, "arg3"sv)
         .parse(args.size(), const_cast<char**>(args.data()));
 
     REQUIRE(o);
