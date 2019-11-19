@@ -28,6 +28,13 @@ struct fmt::formatter<std::shared_ptr<rw::logging::Logger>>
 };
 
 static std::unordered_map<std::string, std::shared_ptr<rw::logging::Logger>> g_loggers;
+/* todo: benchmark
+// global logger map
+// todo: when switched to c++20, use std:atomic<std::shared_ptr<...>>
+static std::shared_ptr<
+        rw::pdata::persistent_map<std::string, std::shared_ptr<logging::Logger>>>
+        g_loggers;
+*/
 
 constexpr std::array level_names{
         "TRACE"sv,
@@ -53,6 +60,46 @@ std::shared_ptr<Logger> get(std::string_view name)
         return logger;
     }
 }
+
+/* todo: benchmark
+std::shared_ptr<logging::Logger> logging::get(std::string_view name)
+{
+    auto loggers = std::atomic_load(&g_loggers);
+    if (!loggers) {
+        // make a new one
+        loggers = std::make_shared<decltype(g_loggers)::element_type>();
+
+        decltype(g_loggers) target{}; // replace if empty
+        if (!std::atomic_compare_exchange_strong(&g_loggers, &target, loggers)) {
+            // somebody beat us to it.
+            loggers = target;
+        }
+    }
+
+    // todo: allocating a string here feels like a hack
+    std::string sname{name};
+    for (;;) {
+        // if it already exists in loggers, return it
+        auto logger = loggers->find(sname);
+        if (logger) {
+            return logger.value();
+        } else {
+            // otherwise, make a new one
+            auto logger = std::make_shared<logging::Logger>(name);
+
+            // try to replace the old map with a new one containing
+            // the new logger
+            if (std::atomic_compare_exchange_weak(&g_loggers, &loggers,
+                        loggers->assoc(sname, logger))) {
+                // succeeded, we can return our new logger
+                return logger;
+            }
+            // no luck, but loggers is now the current value of g_loggers,
+            // so go around again
+        }
+    }
+}
+*/
 
 std::shared_ptr<Logger>dbg()
 {
