@@ -1,12 +1,11 @@
 #ifndef RW_ARGPARSE_H
 #define RW_ARGPARSE_H
 
-#include "fmt/format.h"
-
+#include <array>
 #include <cassert>
-#include <cstdlib>
 #include <optional>
 #include <string_view>
+#include <tuple>
 #include <variant>
 #include <vector>
 
@@ -15,56 +14,20 @@ namespace rw::argparse {
 using namespace std::literals;
 
 // forward
-template <typename T, typename Reporter> class parser;
+template <typename T, typename Reporter>
+class parser;
 
 namespace detail {
 
-struct Reporter {
-    void conflict(std::string_view arg1, std::string_view arg2) const {
-        fmt::print(stderr, "arg '{}' conflicts with arg '{}'\n",
-                arg1, arg2);
-    }
+struct Reporter
+{
+    void conflict(std::string_view arg1, std::string_view arg2) const;
+    void unexpected(std::string_view name) const;
+    void missing_required_of() const;
+    void missing_required(std::string_view name) const;
+    void missing_value(std::string_view name) const;
 
-    void unexpected(std::string_view name) const {
-        fmt::print(stderr, "arg '{}' is not expected\n", name);
-    }
-
-    void missing_required_of() const {
-        fmt::print(stderr, "required at least one arg\n");
-    }
-
-    void missing_required(std::string_view name) const {
-        fmt::print(stderr, "arg '{}' is required\n");
-    }
-
-    void missing_value(std::string_view name) const {
-        fmt::print(stderr, "required value for arg '{}'\n", name);
-    }
-
-    [[noreturn]]
-    void usage(bool ok, std::string_view text) const {
-        // hate to put any functionality in here (so it doesn't need
-        // testing), but trimming usage text makes it a little nicer
-        // when using multiline strings, without messing up output
-        // with extra lines
-        std::size_t first = text.find_first_not_of(" \r\n");
-        if (first == std::string_view::npos) {
-            first = 0;
-        }
-        std::size_t last = text.find_last_not_of(" \r\n");
-        if (last == std::string_view::npos) {
-            last = text.size();
-        }
-
-        fmt::print(ok? stdout : stderr, text.substr(first, (last+1)-first));
-        fmt::print(ok? stdout : stderr, "\n");
-
-        if (ok) {
-            std::exit(EXIT_SUCCESS);
-        } else {
-            std::exit(EXIT_FAILURE);
-        }
-    }
+    [[noreturn]] void usage(bool ok, std::string_view text) const;
 };
 
 template <typename T>
@@ -72,60 +35,58 @@ struct ArgBase
 {
     bool required = false;
 
-    bool needs_value() const {
+    bool needs_value() const
+    {
         return std::holds_alternative<String>(arg);
     }
 
-    void set_value(T& o, std::string_view val) const {
+    void set_value(T& o, std::string_view val) const
+    {
         std::visit(
-                [ &o, &val ](auto&& arg) -> auto {
-                    using V = std::decay_t<decltype(arg)>;
-                    if constexpr (std::is_same_v<V, Bool>) {
-                        // everthing else (incl empty) is true.
-                        bool bval = val != "false" && val != "0";
+            [ &o, &val ](auto&& arg) -> auto {
+                using V = std::decay_t<decltype(arg)>;
+                if constexpr (std::is_same_v<V, Bool>) {
+                    // everthing else (incl empty) is true.
+                    bool bval = val != "false" && val != "0";
 
-                        std::visit(
-                                [ &o, bval ](auto&& arg) -> auto {
-                                    using V = std::decay_t<decltype(arg)>;
-                                    if constexpr (std::is_same_v<V, bool*>) {
-                                        *arg = bval;
-                                    } else if constexpr (std::is_same_v<V, bool T::*>) {
-                                        o.*arg = bval;
-                                    }
-                                },
-                                arg);
-                    } else if constexpr (std::is_same_v<V, String>) {
-                        std::visit(
-                                [ &o, &val ](auto&& arg) -> auto {
-                                    using V = std::decay_t<decltype(arg)>;
-                                    if constexpr (std::is_same_v<V, std::string_view*>) {
-                                        *arg = val;
-                                    } else if constexpr (std::is_same_v<V, std::string_view T::*>) {
-                                        o.*arg = val;
-                                    } else if constexpr (std::is_same_v<V, std::string*>) {
-                                        *arg = std::string(val);
-                                    } else if constexpr (std::is_same_v<V, std::string T::*>) {
-                                        o.*arg = std::string(val);
-                                    }
-                                },
-                                arg);
-                    }
-                },
-                arg);
+                    std::visit(
+                        [ &o, bval ](auto&& arg) -> auto {
+                            using V = std::decay_t<decltype(arg)>;
+                            if constexpr (std::is_same_v<V, bool*>) {
+                                *arg = bval;
+                            } else if constexpr (std::is_same_v<V, bool T::*>) {
+                                o.*arg = bval;
+                            }
+                        },
+                        arg);
+                } else if constexpr (std::is_same_v<V, String>) {
+                    std::visit(
+                        [ &o, &val ](auto&& arg) -> auto {
+                            using V = std::decay_t<decltype(arg)>;
+                            if constexpr (std::is_same_v<V, std::string_view*> ||
+                                    std::is_same_v<V, std::string*>) {
+                                *arg = val;
+                            } else if constexpr (std::is_same_v<V, std::string_view T::*> ||
+                                    std::is_same_v<V, std::string T::*>) {
+                                o.*arg = std::string(val);
+                            }
+                        },
+                        arg);
+                }
+            },
+            arg);
     }
 
 protected:
     template <typename V>
     constexpr ArgBase(V* value, bool required) :
-        required(required),
-        arg(value)
+        required(required), arg(value)
     {
     }
 
     template <typename MemberT>
     constexpr ArgBase(MemberT T::*member, bool required) :
-        required(required),
-        arg(member)
+        required(required), arg(member)
     {
     }
 
@@ -141,15 +102,13 @@ struct PosArg : public ArgBase<T>
 {
     template <typename V>
     constexpr PosArg(V* value, std::string_view name, bool required) :
-        ArgBase<T>(value, required),
-        name(name)
+        ArgBase<T>(value, required), name(name)
     {
     }
 
     template <typename MemberT>
     constexpr PosArg(MemberT T::*member, std::string_view name, bool required) :
-        ArgBase<T>(member, required),
-        name(name)
+        ArgBase<T>(member, required), name(name)
     {
     }
 
@@ -177,7 +136,48 @@ struct Arg : public ArgBase<T>
     std::string_view shortnames;
 };
 
-template<typename T, typename Reporter>
+template <typename T>
+struct ExtraArg
+{
+    template <typename V>
+    constexpr ExtraArg(V* value) :
+        arg(value)
+    {
+    }
+
+    template <typename MemberT>
+    constexpr ExtraArg(MemberT T::*member) :
+        arg(member)
+    {
+    }
+
+    void add_value(T& o, std::string_view val) const
+    {
+        std::visit(
+            [ &o, &val ](auto&& arg) -> auto {
+                using V = std::decay_t<decltype(arg)>;
+                if constexpr (std::is_same_v<V, std::vector<std::string_view>*>) {
+                    arg->push_back(val);
+                } else if constexpr (std::is_same_v<V, std::vector<std::string_view> T::*>) {
+                    (o.*arg).push_back(val);
+                } else if constexpr (std::is_same_v<V, std::vector<std::string>*>) {
+                    arg->push_back(std::string(val));
+                } else if constexpr (std::is_same_v<V, std::vector<std::string> T::*>) {
+                    (o.*arg).push_back(std::string(val));
+                }
+            },
+            arg);
+    }
+
+private:
+    std::variant<std::vector<std::string_view>*,
+            std::vector<std::string_view> T::*,
+            std::vector<std::string>*,
+            std::vector<std::string> T::*>
+            arg;
+};
+
+template <typename T, typename Reporter>
 struct parse_state
 {
     parse_state(std::size_t num_args, Reporter& reporter) :
@@ -188,6 +188,8 @@ struct parse_state
     }
 
     Reporter& reporter;
+
+    bool show_usage = false;
 
     bool end_of_named = false;
     std::optional<std::size_t> waiting_idx;
@@ -210,13 +212,12 @@ public:
     {
     }
 
-    // todo: add required
-
     template <typename V>
     Derived& optional(V&& pval, std::string_view longname,
-            std::string_view shortnames = ""sv) {
+            std::string_view shortnames = ""sv)
+    {
         p.optional(pval, longname, shortnames);
-        group.push_back(p.args.size()-1);
+        group.push_back(p.args.size() - 1);
         return static_cast<Derived&>(*this);
     }
 
@@ -224,6 +225,9 @@ protected:
     parser<T, Reporter>& p;
     std::vector<std::size_t> group;
 };
+
+using parsed_arg = std::tuple<bool, std::string_view, std::string_view>;
+parsed_arg parse_arg(std::string_view arg);
 
 } // namespace detail
 
@@ -241,14 +245,14 @@ public:
 protected:
     friend class parser<T, Reporter>;
 
-    bool satisfied(const detail::parse_state<T, Reporter>& state) const {
+    bool satisfied(const detail::parse_state<T, Reporter>& state) const
+    {
         std::optional<std::size_t> found_arg;
         for (auto idx : this->group) {
             if (state.satisfied[idx]) {
                 if (!found_arg) {
                     found_arg = idx;
                 } else {
-                    // todo: better message! arg name?
                     state.reporter.conflict(
                             this->p.args[idx].longname,
                             this->p.args[*found_arg].longname);
@@ -269,23 +273,30 @@ protected:
     bool required;
 };
 
-template <typename T, typename Reporter = detail::Reporter>
+struct no_options_type
+{};
+
+template <typename T = no_options_type, typename Reporter = detail::Reporter>
 class parser
 {
 public:
     parser& usage(std::string_view usage,
             std::string_view longname = "help"sv,
-            std::string_view shortnames = "?h") {
+            std::string_view shortnames = "?h")
+    {
         usage_text = usage;
-        return optional(&show_usage, longname, shortnames);
+        usage_longname = longname;
+        usage_shortnames = shortnames;
+        return *this;
     }
 
     template <typename V>
-    parser& positional(V&& pval, std::string_view name, bool required = true) {
+    parser& positional(V&& pval, std::string_view name, bool required = true)
+    {
         // name is required
         assert(!name.empty());
 
-        #ifdef NDEBUG
+#ifdef NDEBUG
         if (required) {
             for (auto it = pos_args.crbegin(); it != pos_args.crend(); ++it) {
                 if (!it->required) {
@@ -296,17 +307,16 @@ public:
                 }
             }
         }
-        #endif
+#endif
 
         pos_args.emplace_back(std::forward<V&&>(pval), name, required);
         return *this;
     }
 
-    // todo: add required
-
     template <typename V>
     parser& optional(V&& pval, std::string_view longname,
-            std::string_view shortnames = ""sv) {
+            std::string_view shortnames = ""sv)
+    {
         // longname is required
         assert(!longname.empty());
 
@@ -314,14 +324,34 @@ public:
         return *this;
     }
 
-    excl_group<T, Reporter>& one_of(bool required = false) {
+    template <typename V>
+    parser& required(V&& pval, std::string_view longname,
+            std::string_view shortnames = ""sv)
+    {
+        // longname is required
+        assert(!longname.empty());
+
+        args.emplace_back(std::forward<V&&>(pval), longname, shortnames, true);
+        return *this;
+    }
+
+    template <typename V>
+    parser& extra(V&& pval)
+    {
+        extra_arg = ExtraArg(std::forward<V&&>(pval));
+        return *this;
+    }
+
+    excl_group<T, Reporter>& one_of(bool required = false)
+    {
         subs.emplace_back(*this, required);
         return subs.back();
     }
 
     std::optional<T> parse(const int argc, char** const argv, Reporter& reporter) const;
 
-    std::optional<T> parse(const int argc, char** const argv) const {
+    std::optional<T> parse(const int argc, char** const argv) const
+    {
         Reporter reporter;
         return parse(argc, argv, reporter);
     }
@@ -332,45 +362,7 @@ private:
 
     using PosArg = detail::PosArg<T>;
     using Arg = detail::Arg<T>;
-
-    // todo: rename
-    using arg_pair = std::tuple<bool, std::string_view, std::string_view>;
-
-    arg_pair parse_arg(std::string_view arg) const
-    {
-        if (arg.size() >= 2 && arg[0] == '-') {
-            if (arg[1] == '-') {
-                if (arg.size() == 2) {
-                    // end of named
-                    return {true, arg, {}};
-                } else {
-                    // long
-
-                    // check for space or =
-                    if (auto idx = arg.find_first_of("= "sv);
-                            idx != std::string_view::npos) {
-                        return {true, arg.substr(2, idx - 2), arg.substr(idx + 1)};
-                    } else {
-                        return {true, arg.substr(2), {}};
-                    }
-                }
-            } else {
-                // short
-                if (arg.size() > 2) {
-                    // check for space, =, or following chars
-                    if (arg[2] == '=' || arg[2] == ' ') {
-                        return {false, arg.substr(1, 1), arg.substr(3)};
-                    } else {
-                        return {false, arg.substr(1, 1), arg.substr(2)};
-                    }
-                }
-                return {false, arg.substr(1, 1), {}};
-            }
-        }
-
-        // maybe positional
-        return {false, {}, arg};
-    }
+    using ExtraArg = detail::ExtraArg<T>;
 
     bool handle_short(detail::parse_state<T, Reporter>& state, std::string_view name,
             std::string_view val) const;
@@ -383,17 +375,22 @@ private:
             std::string_view val) const;
 
     std::string_view usage_text;
+    std::string_view usage_longname;
+    std::string_view usage_shortnames;
 
-    // todo: can't just be excl_group, need to support other groups
+    // todo: support other kinds of groups
+    // scenarios (some/partially implemented):
+    //   multiple exclusive groups, each optional
+    //   exclusive groups with required selection
+    //   optional groups where multiple members are required
+    //   nested groups
+    //   command groups? (switching on a positional arg)
     std::vector<excl_group<T, Reporter>> subs;
 
-    // todo: combine, w/ variant?
+    // todo: combine pos_args and args, maybe w/ variant?
     std::vector<PosArg> pos_args;
     std::vector<Arg> args;
-
-    // todo: this shouldn't be part of the parser, to allow
-    // for parsing multiple times.
-    bool show_usage = false;
+    std::optional<ExtraArg> extra_arg;
 };
 
 template <typename T, typename Reporter>
@@ -405,7 +402,7 @@ std::optional<T> parser<T, Reporter>::parse(const int argc, char** const argv, R
     if (argc > 1) {
         for (int i = 1; ok && i < argc; ++i) {
             if (!state.end_of_named) {
-                auto [islong, name, val] = parse_arg(argv[i]);
+                auto [islong, name, val] = detail::parse_arg(argv[i]);
                 if (name.size() == 0) {
                     // positional
                     if (state.waiting_idx) {
@@ -414,8 +411,9 @@ std::optional<T> parser<T, Reporter>::parse(const int argc, char** const argv, R
                     } else {
                         if (state.pos_count < pos_args.size()) {
                             set_pos_value(state, state.pos_count++, val);
+                        } else if (extra_arg) {
+                            extra_arg->add_value(state.o, val);
                         } else {
-                            // todo: positional args "rest"
                             state.reporter.unexpected(val);
                             ok = false;
                         }
@@ -426,7 +424,7 @@ std::optional<T> parser<T, Reporter>::parse(const int argc, char** const argv, R
                         ok = false;
                     } else {
                         if (!((islong && handle_long(state, name, val)) ||
-                                 (!islong && handle_short(state, name, val)))) {
+                                    (!islong && handle_short(state, name, val)))) {
                             ok = false;
                         }
                     }
@@ -434,8 +432,9 @@ std::optional<T> parser<T, Reporter>::parse(const int argc, char** const argv, R
             } else {
                 if (state.pos_count < pos_args.size()) {
                     set_pos_value(state, state.pos_count++, argv[i]);
+                } else if (extra_arg) {
+                    extra_arg->add_value(state.o, argv[i]);
                 } else {
-                    // todo: positional args "rest"
                     state.reporter.unexpected(argv[i]);
                     ok = false;
                 }
@@ -448,6 +447,7 @@ std::optional<T> parser<T, Reporter>::parse(const int argc, char** const argv, R
         }
     }
 
+    // todo: combine pos_args and args, do it in one loop
     for (std::size_t idx = 0; idx < pos_args.size(); ++idx) {
         if (pos_args[idx].required && !state.pos_satisfied[idx]) {
             state.reporter.missing_required(pos_args[idx].name);
@@ -471,7 +471,7 @@ std::optional<T> parser<T, Reporter>::parse(const int argc, char** const argv, R
         }
     }
 
-    if (!ok || show_usage) {
+    if (!ok || state.show_usage) {
         state.reporter.usage(ok, usage_text);
 
         // the reporter usage call may exit, maybe not.
@@ -489,22 +489,15 @@ bool parser<T, Reporter>::handle_short(detail::parse_state<T, Reporter>& state,
         auto& arg = args[idx];
         if (!arg.shortnames.empty() &&
                 arg.shortnames.find(name[0]) != std::string_view::npos) {
-            // todo: should consolidate this with handle_long's
-            if (arg.needs_value()) {
-                if (val.empty()) {
-                    // todo: what about -x= (with no value?)
-                    state.waiting_idx = idx;
-                } else {
-                    set_value(state, idx, val);
-                }
-            } else {
-                // bools can just be set.
-                // todo: better true/false/empty handling..
-                // --arg= really should be false, not true
-                set_value(state, idx, "true"sv);
-            }
+            set_value(state, idx, val);
             return true;
         }
+    }
+
+    if (!usage_shortnames.empty() &&
+            usage_shortnames.find(name[0]) != std::string_view::npos) {
+        state.show_usage = true;
+        return true;
     }
 
     state.reporter.unexpected(name);
@@ -519,22 +512,14 @@ bool parser<T, Reporter>::handle_long(detail::parse_state<T, Reporter>& state,
         for (std::size_t idx = 0; idx < args.size(); ++idx) {
             auto& arg = args[idx];
             if (!arg.longname.empty() && arg.longname == name) {
-                // todo: should consolidate this with handle_short's
-                if (arg.needs_value()) {
-                    if (val.empty()) {
-                        // todo: what about --xzy= (with no value?)
-                        state.waiting_idx = idx;
-                    } else {
-                        set_value(state, idx, val);
-                    }
-                } else {
-                    // bools can just be set.
-                    // todo: better true/false/empty handling..
-                    // --arg= really should be false, not true
-                    set_value(state, idx, "true"sv);
-                }
+                set_value(state, idx, val);
                 return true;
             }
+        }
+
+        if (!usage_longname.empty() && usage_longname == name) {
+            state.show_usage = true;
+            return true;
         }
 
         state.reporter.unexpected(name);
@@ -559,8 +544,21 @@ void parser<T, Reporter>::set_value(detail::parse_state<T, Reporter>& state, std
         std::string_view val) const
 {
     auto& arg = args[idx];
-    arg.set_value(state.o, val);
-    state.satisfied[idx] = true;
+    if (arg.needs_value()) {
+        if (val.empty()) {
+            // todo: what about -x= (with no value?)
+            state.waiting_idx = idx;
+        } else {
+            arg.set_value(state.o, val);
+            state.satisfied[idx] = true;
+        }
+    } else {
+        // bools can just be set.
+        // todo: better true/false/empty handling..
+        // --arg= really should be false, not true
+        arg.set_value(state.o, "true"sv);
+        state.satisfied[idx] = true;
+    }
 }
 
 } // namespace rw::argparse

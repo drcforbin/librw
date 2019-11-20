@@ -19,6 +19,7 @@ inc = include_directories('include')
 
 librw = static_library(
     'rw', [
+        'argparse.cpp',
         'fmt/format.cc',
         'fmt/posix.cc',
         'logging.cpp',
