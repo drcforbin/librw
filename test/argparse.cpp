@@ -1,6 +1,8 @@
 #include "doctest.h"
 #include "rw/argparse.h"
 
+#include <string>
+
 using namespace std::literals;
 
 // todo: test int args

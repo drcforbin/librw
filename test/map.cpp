@@ -2,6 +2,8 @@
 #include "doctest.h"
 #include "rw/pdata/map.h"
 
+#include <ostream>
+
 // todo: rename node_count to something different,
 // and note that it's intended to ease debugging
 
