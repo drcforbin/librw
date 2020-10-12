@@ -4,6 +4,7 @@
 #include <array>
 #include <cassert>
 #include <optional>
+#include <string>
 #include <string_view>
 #include <tuple>
 #include <variant>
