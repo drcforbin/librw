@@ -4,6 +4,7 @@
 
 #include <ctime>
 #include <string_view>
+#include <unistd.h>
 #include <unordered_map>
 
 using namespace std::literals;
@@ -28,6 +29,12 @@ struct fmt::formatter<std::shared_ptr<rw::logging::Logger>>
     }
 };
 
+// lazy cache of whether to print color logs. not threadsafe,
+// but it won't hurt to initialize multiple times. if we use
+// atomics for the map, consider call_once or something for
+// this. -1 not initialized, 0 no color, 1 use color
+static int g_is_color = -1;
+
 static std::unordered_map<std::string, std::shared_ptr<rw::logging::Logger>> g_loggers;
 /* todo: benchmark
 // global logger map
@@ -45,6 +52,15 @@ constexpr std::array level_names{
         "ERROR"sv,
         "FATAL"sv,
         "OTHER"sv};
+
+constexpr std::array colored_level_start {
+        "\e[96m"sv,
+        "\e[32m"sv,
+        "\e[34m"sv,
+        "\e[91m"sv,
+        "\e[1;31m"sv,
+        "\e[1;30m"sv,
+        "\e[35m"sv};
 
 namespace rw::logging {
 
@@ -114,16 +130,27 @@ void details::log_message(const logging::details::Message& msg)
             msg.ts.time_since_epoch())
                       .count();
 
-    std::tm ltm = {0};
-    localtime_r(&ts, &ltm);
+    // get/cache whether to use color output
+    if (g_is_color == -1) {
+        g_is_color = isatty(fileno(stdout))? 1 : 0;
+    }
 
     int level = static_cast<int>(msg.level);
     if (msg.level < log_level::trace || log_level::off < msg.level)
         level = static_cast<int>(log_level::off); // OTHER
     auto levelstr = level_names[level];
 
-    fmt::print("{:%Y-%m-%dT%H:%M:%S}.{:03d} {} {} - {}\n",
-            ltm, ms % 1000, levelstr, msg.logname, msg.msg);
+    if (g_is_color) {
+        auto color_start = colored_level_start[level];
+        fmt::print("{:%Y-%m-%dT%H:%M:%S}.{:03d} {}{} {} - {}\e[0m\n",
+                fmt::localtime(ts), ms % 1000, color_start, levelstr,
+                msg.logname,
+                msg.msg);
+    } else {
+        fmt::print("{:%Y-%m-%dT%H:%M:%S}.{:03d} {} {} - {}\n",
+                fmt::localtime(ts), ms % 1000, levelstr, msg.logname,
+                msg.msg);
+    }
 }
 
 } // namespace rw::logging
