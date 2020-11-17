@@ -1,7 +1,7 @@
 #ifndef RW_PDATA_MAP_DETAIL_H
 #define RW_PDATA_MAP_DETAIL_H
 
-#include "fmt/format.h"
+#include "fmt/core.h"
 
 #include <thread>
 #include <variant>

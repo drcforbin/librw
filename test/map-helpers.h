@@ -1,7 +1,7 @@
 #ifndef CSXP_PDATA_TEST_HELPERS_H
 #define CSXP_PDATA_TEST_HELPERS_H
 
-#include "fmt/format.h"
+#include "fmt/core.h"
 #include "rw/pdata/map.h"
 
 #include <random>

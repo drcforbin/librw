@@ -5,6 +5,7 @@
 #include "rw/pdata/map-detail.h"
 
 namespace rw::pdata {
+using namespace std::literals;
 
 template <class K, class T>
 class map_base : public std::enable_shared_from_this<map_base<K, T>>
@@ -112,9 +113,8 @@ public:
     std::string dump(int indent) const
     {
         fmt::memory_buffer msg;
-        fmt::writer writer(msg);
 
-        writer.write("tmap\n");
+        fmt::format_to(msg, "tmap\n");
         for (int idt = 0; idt < indent; idt++) {
             fmt::format_to(msg, " ");
         }
@@ -248,9 +248,8 @@ public:
     std::string dump(int indent) const
     {
         fmt::memory_buffer msg;
-        fmt::writer writer(msg);
 
-        writer.write("pmap\n");
+        fmt::format_to(msg, "pmap\n");
         for (int idt = 0; idt < indent; idt++) {
             fmt::format_to(msg, " ");
         }

@@ -1,7 +1,7 @@
 #ifndef CSXP_LOGGING_H
 #define CSXP_LOGGING_H
 
-#include "fmt/format.h"
+#include "fmt/core.h"
 
 #include <chrono>
 #include <cstdlib>

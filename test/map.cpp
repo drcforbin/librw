@@ -1,6 +1,7 @@
 #include "map-helpers.h"
 #include "doctest.h"
 #include "rw/pdata/map.h"
+#include "fmt/format.h"
 
 #include <ostream>
 
