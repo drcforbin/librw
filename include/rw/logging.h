@@ -4,10 +4,6 @@
 #include "fmt/core.h"
 
 #include <chrono>
-#include <cstdlib>
-#include <memory>
-#include <stdlib.h>
-#include <string>
 #include <string_view>
 
 namespace rw::logging {

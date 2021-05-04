@@ -1,7 +1,7 @@
 #ifndef RW_H
 #define RW_H
 
-#include "rw/logging.h"
+#include <string_view>
 
 namespace rw {
 
