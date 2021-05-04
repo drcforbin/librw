@@ -22,6 +22,8 @@ librw = static_library(
         'argparse.cpp',
         'fmt/format.cc',
         'logging.cpp',
+        'profiling.cpp',
+        'utf8.cpp',
         version_file
     ],
     include_directories : inc,
@@ -36,7 +38,9 @@ librw_dep = declare_dependency(
 executable(
     'librw-bench', [
         'bench/main.cpp',
-        'bench/map.cpp'
+        'bench/map.cpp',
+        'bench/utf8.cpp',
+        'test/utf8-data.cpp',
     ],
     dependencies: [librw_dep],
     include_directories : inc
@@ -46,7 +50,9 @@ testexe = executable(
     'librw-test', [
         'test/argparse.cpp',
         'test/main.cpp',
-        'test/map.cpp'
+        'test/map.cpp',
+        'test/utf8.cpp',
+        'test/utf8-data.cpp',
     ],
     dependencies: [librw_dep],
     include_directories : inc
